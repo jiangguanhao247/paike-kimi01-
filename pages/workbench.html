@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>排课工作台 - 智能排课系统</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="top-nav">
+    <div class="logo">
+      <div class="logo-icon">📅</div>
+      <span>智能排课系统</span>
+    </div>
+    <div class="nav-links">
+      <a href="../index.html">首页</a>
+      <a href="base-data.html">基础数据</a>
+      <a href="course-arrange.html">课程安排</a>
+      <a href="teacher-arrange.html">教师安排</a>
+      <a href="workbench.html" class="active">排课工作台</a>
+    </div>
+  </div>
+
+  <div class="breadcrumb">
+    <a href="../index.html">首页</a>
+    <span class="sep">/</span>
+    <span class="current">排课工作台</span>
+  </div>
+
+  <div class="main-content">
+    <div class="toolbar">
+      <label>当前班级:</label>
+      <select id="class-select"></select>
+      <button class="btn btn-primary" onclick="autoSchedule()">自动排课</button>
+      <button class="btn" onclick="clearClassSchedule()">清空本班</button>
+      <button class="btn" onclick="exportData()">导出 JSON</button>
+      <button class="btn" onclick="document.getElementById('file-input').click()">导入 JSON</button>
+      <input type="file" id="file-input" accept=".json" style="display:none" onchange="importData(this)">
+      <div class="status-bar" id="top-status" style="margin-left:auto;"></div>
+    </div>
+
+    <div class="workbench-main">
+      <div class="left-panel">
+        <div class="panel-box">
+          <div class="panel-title">拖拽课程到课表</div>
+          <div id="teacher-list" style="max-height:600px;overflow:auto;"></div>
+          <div class="hint">← 拖拽课程卡片到中间课表</div>
+        </div>
+      </div>
+
+      <div class="center-panel">
+        <div class="panel-box">
+          <div class="panel-title">
+            <span id="class-title">班级课表</span>
+            <span style="font-size:12px;color:#86868b;font-weight:400;" id="class-subtitle"></span>
+          </div>
+          <div class="timetable-grid" id="class-timetable"></div>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <div class="panel-box">
+          <div class="panel-title">教师课表</div>
+          <div id="teacher-detail">
+            <div class="empty-tip">点击左侧课程卡片查看教师课表</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/data.js"></script>
+  <script>
+const DAYS = ['周一','周二','周三','周四','周五'];
+const PERIODS = [1,2,3,4,5,6,7,8];
+
+const COURSE_COLORS = [
+  {bg:'#e3f2fd', text:'#1565c0'}, {bg:'#fce4ec', text:'#c62828'},
+  {bg:'#e8f5e9', text:'#2e7d32'}, {bg:'#f3e5f5', text:'#6a1b9a'},
+  {bg:'#fff3e0', text:'#e65100'}, {bg:'#e0f7fa', text:'#00838f'},
+  {bg:'#f1f8e9', text:'#558b2f'}, {bg:'#fff8e1', text:'#f9a825'},
+  {bg:'#efebe9', text:'#5d4037'}, {bg:'#e8eaf6', text:'#303f9f'},
+];
+
+const CLASS_COLORS = [
+  {bg:'#e3f2fd', text:'#1565c0'}, {bg:'#fce4ec', text:'#c62828'},
+  {bg:'#e8f5e9', text:'#2e7d32'}, {bg:'#f3e5f5', text:'#6a1b9a'},
+];
+
+let currentClassId = null;
+let selectedTeacherId = null;
+let dragCourseId = null;
+
+function init() {
+  renderClassSelect();
+  if (DataStore.getClasses().length > 0) {
+    selectClass(DataStore.getClasses()[0].id);
+  }
+}
+
+function getCourseColor(courseId) {
+  const idx = DataStore.getCourses().findIndex(c => c.id === courseId);
+  return COURSE_COLORS[idx % COURSE_COLORS.length];
+}
+
+function getClassColor(classId) {
+  const idx = DataStore.getClasses().findIndex(c => c.id === classId);
+  return CLASS_COLORS[idx % CLASS_COLORS.length];
+}
+
+function getClassSchedule(classId) {
+  return DataStore.data.timetable[classId] || {};
+}
+
+function isTeacherBusy(teacherId, day, period, excludeClassId) {
+  for (const [cid, sched] of Object.entries(DataStore.data.timetable)) {
+    if (cid === excludeClassId) continue;
+    const entry = sched[`${day}_${period}`];
+    if (entry && entry.teacherId === teacherId) return true;
+  }
+  return false;
+}
+
+function isRoomBusy(roomId, day, period, excludeClassId) {
+  for (const [cid, sched] of Object.entries(DataStore.data.timetable)) {
+    if (cid === excludeClassId) continue;
+    const entry = sched[`${day}_${period}`];
+    if (entry && entry.roomId === roomId) return true;
+  }
+  return false;
+}
+
+function findAvailableRoom(courseId, classId, day, period) {
+  const course = DataStore.getCourses().find(c => c.id === courseId);
+  const cls = DataStore.getClasses().find(c => c.id === classId);
+  for (const room of DataStore.getRooms()) {
+    if (room.capacity < cls.size) continue;
+    if (course.type === 'lab' && room.type !== 'lab') continue;
+    if (isRoomBusy(room.id, day, period, classId)) continue;
+    return room.id;
+  }
+  return null;
+}
+
+function canPlace(courseId, classId, day, period) {
+  const sched = getClassSchedule(classId);
+  if (sched[`${day}_${period}`]) return false;
+  const course = DataStore.getCourses().find(c => c.id === courseId);
+  // 统计该课程已排课时
+  let assigned = 0;
+  for (const entry of Object.values(sched)) {
+    if (entry.courseId === courseId) assigned++;
+  }
+  const hours = DataStore.getCourseHours(classId, courseId);
+  if (assigned >= hours) return false;
+  if (isTeacherBusy(course.teacherId, day, period, classId)) return false;
+  const roomId = findAvailableRoom(courseId, classId, day, period);
+  if (!roomId) return false;
+  return true;
+}
+
+function renderClassSelect() {
+  const sel = document.getElementById('class-select');
+  sel.innerHTML = '';
+  for (const cls of DataStore.getClasses()) {
+    const opt = document.createElement('option');
+    opt.value = cls.id;
+    opt.textContent = cls.name;
+    sel.appendChild(opt);
+  }
+  sel.onchange = (e) => selectClass(e.target.value);
+}
+
+function selectClass(id) {
+  currentClassId = id;
+  document.getElementById('class-select').value = id;
+  const cls = DataStore.getClasses().find(c => c.id === id);
+  document.getElementById('class-title').textContent = cls.name + ' 课表';
+  document.getElementById('class-subtitle').textContent = cls.size + '人';
+  selectedTeacherId = null;
+  renderTeacherList();
+  renderClassTimetable();
+  renderTeacherTimetable();
+  updateTopStatus();
+}
+
+function renderTeacherList() {
+  const container = document.getElementById('teacher-list');
+  container.innerHTML = '';
+
+  for (const teacher of DataStore.getTeachers()) {
+    const group = document.createElement('div');
+    group.className = 'teacher-group expanded';
+
+    const header = document.createElement('div');
+    header.className = 'teacher-header';
+    header.innerHTML = `<span>${teacher.name}</span><span class="arrow">▶</span>`;
+    header.onclick = () => group.classList.toggle('expanded');
+    group.appendChild(header);
+
+    const coursesDiv = document.createElement('div');
+    coursesDiv.className = 'teacher-courses';
+
+    // 找出该教师在该班级教的课程
+    const cls = DataStore.getClasses().find(c => c.id === currentClassId);
+    const grade = cls ? cls.grade : '';
+    for (const course of DataStore.getCourses()) {
+      // 过滤不适用当前年级的课程
+      if (grade && course.grades && course.grades.length > 0 && !course.grades.includes(grade)) continue;
+      const assign = DataStore.getTeacherAssign(currentClassId, course.id);
+      if (assign !== teacher.id) continue;
+      const hours = DataStore.getCourseHours(currentClassId, course.id);
+      const sched = getClassSchedule(currentClassId);
+      let assigned = 0;
+      for (const entry of Object.values(sched)) {
+        if (entry.courseId === course.id) assigned++;
+      }
+      const remaining = hours - assigned;
+      const canDrag = remaining > 0;
+
+      const card = document.createElement('div');
+      card.className = 'drag-card';
+      card.draggable = canDrag;
+      card.dataset.courseId = course.id;
+
+      const colors = getCourseColor(course.id);
+      card.style.borderLeft = '3px solid ' + colors.text;
+
+      card.innerHTML = `
+        <span class="course-name">${course.name}</span>
+        <span class="remain ${remaining === 0 ? 'zero' : ''}">剩${remaining}节</span>
+      `;
+
+      card.addEventListener('dragstart', (e) => {
+        dragCourseId = course.id;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', course.id);
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        dragCourseId = null;
+        document.querySelectorAll('.cell.drag-over, .cell.drag-invalid').forEach(c => {
+          c.classList.remove('drag-over', 'drag-invalid');
+        });
+      });
+
+      card.addEventListener('click', () => {
+        selectedTeacherId = teacher.id;
+        renderTeacherTimetable();
+      });
+
+      coursesDiv.appendChild(card);
+    }
+
+    group.appendChild(coursesDiv);
+    container.appendChild(group);
+  }
+}
+
+function renderClassTimetable() {
+  const container = document.getElementById('class-timetable');
+  container.innerHTML = '';
+  const sched = getClassSchedule(currentClassId);
+
+  const corner = document.createElement('div');
+  corner.className = 'th';
+  container.appendChild(corner);
+  for (const day of DAYS) {
+    const th = document.createElement('div');
+    th.className = 'th';
+    th.textContent = day;
+    container.appendChild(th);
+  }
+
+  for (let pi = 0; pi < PERIODS.length; pi++) {
+    const period = PERIODS[pi];
+    const pl = document.createElement('div');
+    pl.className = 'period-label';
+    pl.textContent = period;
+    container.appendChild(pl);
+
+    for (let d = 0; d < DAYS.length; d++) {
+      const key = `${d}_${pi}`;
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.day = d;
+      cell.dataset.period = pi;
+
+      cell.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!dragCourseId) return;
+        const can = canPlace(dragCourseId, currentClassId, d, pi);
+        if (sched[key]) {
+          cell.classList.add('drag-invalid');
+        } else if (can) {
+          cell.classList.add('drag-over');
+        } else {
+          cell.classList.add('drag-invalid');
+        }
+      });
+
+      cell.addEventListener('dragleave', () => {
+        cell.classList.remove('drag-over', 'drag-invalid');
+      });
+
+      cell.addEventListener('drop', (e) => {
+        e.preventDefault();
+        cell.classList.remove('drag-over', 'drag-invalid');
+        const courseId = e.dataTransfer.getData('text/plain') || dragCourseId;
+        if (!courseId || sched[key]) return;
+        if (canPlace(courseId, currentClassId, d, pi)) {
+          addEntry(d, pi, courseId);
+        }
+      });
+
+      if (sched[key]) {
+        const entry = sched[key];
+        const course = DataStore.getCourses().find(c => c.id === entry.courseId);
+        const teacher = DataStore.getTeachers().find(t => t.id === entry.teacherId);
+        const room = DataStore.getRooms().find(r => r.id === entry.roomId);
+        const colors = getCourseColor(entry.courseId);
+
+        cell.innerHTML = `
+          <div class="course-block" style="background:${colors.bg};color:${colors.text}">
+            <div>${course ? course.name : '?'}</div>
+            <div class="teacher-name">${teacher ? teacher.name : '?'}</div>
+            <div class="room-name">${room ? room.name : '?'}</div>
+          </div>
+          <button class="delete-btn" onclick="event.stopPropagation();removeEntry(${d},${pi})">×</button>
+        `;
+
+        cell.querySelector('.course-block').addEventListener('click', () => {
+          selectedTeacherId = entry.teacherId;
+          renderTeacherTimetable();
+        });
+      }
+
+      container.appendChild(cell);
+    }
+  }
+}
+
+function renderTeacherTimetable() {
+  const container = document.getElementById('teacher-detail');
+  if (!selectedTeacherId) {
+    container.innerHTML = '<div class="empty-tip">点击左侧课程卡片查看教师课表</div>';
+    return;
+  }
+
+  const teacher = DataStore.getTeachers().find(t => t.id === selectedTeacherId);
+  const entries = [];
+  for (const [cid, sched] of Object.entries(DataStore.data.timetable)) {
+    for (const [key, entry] of Object.entries(sched)) {
+      if (entry.teacherId === selectedTeacherId) {
+        const [day, period] = key.split('_').map(Number);
+        entries.push({day, period, classId: cid, courseId: entry.courseId, roomId: entry.roomId});
+      }
+    }
+  }
+
+  let html = `
+    <div class="teacher-info">
+      <div class="name">${teacher.name}</div>
+      <div>共排 ${entries.length} 节课</div>
+    </div>
+    <div class="teacher-timetable">
+  `;
+
+  html += '<div class="th"></div>';
+  for (const day of DAYS) html += `<div class="th">${day}</div>`;
+
+  for (let pi = 0; pi < PERIODS.length; pi++) {
+    html += `<div class="period-label">${PERIODS[pi]}</div>`;
+    for (let d = 0; d < DAYS.length; d++) {
+      const entry = entries.find(e => e.day === d && e.period === pi);
+      if (entry) {
+        const cls = DataStore.getClasses().find(c => c.id === entry.classId);
+        const course = DataStore.getCourses().find(c => c.id === entry.courseId);
+        const room = DataStore.getRooms().find(r => r.id === entry.roomId);
+        const colors = getClassColor(entry.classId);
+        html += `
+          <div class="cell">
+            <div class="entry" style="background:${colors.bg};color:${colors.text}">
+              <div>${course ? course.name : '?'}</div>
+              <div class="class-name">${cls ? cls.name : '?'} ${room ? room.name : ''}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        html += '<div class="cell empty"></div>';
+      }
+    }
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function addEntry(day, period, courseId) {
+  const roomId = findAvailableRoom(courseId, currentClassId, day, period);
+  if (!roomId) { alert('没有可用教室'); return; }
+  const course = DataStore.getCourses().find(c => c.id === courseId);
+
+  if (!DataStore.data.timetable[currentClassId]) {
+    DataStore.data.timetable[currentClassId] = {};
+  }
+  DataStore.data.timetable[currentClassId][`${day}_${period}`] = {
+    courseId, teacherId: course.teacherId, roomId
+  };
+  DataStore.save();
+  renderTeacherList();
+  renderClassTimetable();
+  renderTeacherTimetable();
+  updateTopStatus();
+}
+
+function removeEntry(day, period) {
+  if (!confirm('确定删除这节课？')) return;
+  const sched = DataStore.data.timetable[currentClassId];
+  if (sched) {
+    delete sched[`${day}_${period}`];
+    DataStore.save();
+    renderTeacherList();
+    renderClassTimetable();
+    renderTeacherTimetable();
+    updateTopStatus();
+  }
+}
+
+function clearClassSchedule() {
+  if (!confirm('确定清空当前班级的所有排课？')) return;
+  delete DataStore.data.timetable[currentClassId];
+  DataStore.save();
+  renderTeacherList();
+  renderClassTimetable();
+  renderTeacherTimetable();
+  updateTopStatus();
+}
+
+function updateTopStatus() {
+  const sched = getClassSchedule(currentClassId);
+  const totalSlots = Object.keys(sched).length;
+  let totalRequired = 0;
+  for (const c of DataStore.getCourses()) {
+    totalRequired += DataStore.getCourseHours(currentClassId, c.id);
+  }
+  const el = document.getElementById('top-status');
+  if (totalSlots >= totalRequired) {
+    el.innerHTML = `<span class="ok">已完成 (${totalSlots}/${totalRequired})</span>`;
+  } else {
+    el.innerHTML = `<span class="warn">排课中 (${totalSlots}/${totalRequired})</span>`;
+  }
+}
+
+function autoSchedule() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '排课中...';
+
+  setTimeout(() => {
+    const cls = currentClassId;
+    const tasks = [];
+    for (const course of DataStore.getCourses()) {
+      const hours = DataStore.getCourseHours(cls, course.id);
+      const sched = getClassSchedule(cls);
+      let assigned = 0;
+      for (const entry of Object.values(sched)) {
+        if (entry.courseId === course.id) assigned++;
+      }
+      const remaining = hours - assigned;
+      for (let i = 0; i < remaining; i++) {
+        tasks.push({
+          id: `${cls}_${course.id}_${i}`,
+          course_id: course.id,
+          teacher_id: course.teacherId,
+          room_type: course.type,
+          class_size: DataStore.getClasses().find(c => c.id === cls).size,
+        });
+      }
+    }
+
+    if (tasks.length === 0) {
+      alert('当前班级已排满');
+      btn.disabled = false;
+      btn.textContent = '自动排课';
+      return;
+    }
+
+    const slots = [];
+    for (let d = 0; d < DAYS.length; d++) {
+      for (let p = 0; p < PERIODS.length; p++) {
+        const key = `${d}_${p}`;
+        const existing = getClassSchedule(cls)[key];
+        if (existing) continue;
+        for (const r of DataStore.getRooms()) {
+          slots.push({ day: d, period: p, room_id: r.id, room_capacity: r.capacity, room_type: r.type });
+        }
+      }
+    }
+
+    const domains = {};
+    for (const task of tasks) {
+      domains[task.id] = slots.filter(slot => {
+        const course = DataStore.getCourses().find(c => c.id === task.course_id);
+        if (slot.room_capacity < task.class_size) return false;
+        if (course.type === 'lab' && slot.room_type !== 'lab') return false;
+        if (isTeacherBusy(task.teacher_id, slot.day, slot.period, cls)) return false;
+        if (isRoomBusy(slot.room_id, slot.day, slot.period, cls)) return false;
+        return true;
+      });
+    }
+
+    const usedTeacher = new Set();
+    const usedRoom = new Set();
+    const result = {};
+
+    function isConsistent(task, slot) {
+      const tk = `${task.teacher_id}|${slot.day}|${slot.period}`;
+      const rk = `${slot.room_id}|${slot.day}|${slot.period}`;
+      if (usedTeacher.has(tk)) return false;
+      if (usedRoom.has(rk)) return false;
+      return true;
+    }
+
+    function backtrack(index) {
+      if (index === tasks.length) return true;
+      const task = tasks[index];
+      const valid = domains[task.id].filter(s => isConsistent(task, s));
+      if (valid.length === 0) return false;
+      for (const slot of valid) {
+        result[task.id] = slot;
+        usedTeacher.add(`${task.teacher_id}|${slot.day}|${slot.period}`);
+        usedRoom.add(`${slot.room_id}|${slot.day}|${slot.period}`);
+        if (backtrack(index + 1)) return true;
+        delete result[task.id];
+        usedTeacher.delete(`${task.teacher_id}|${slot.day}|${slot.period}`);
+        usedRoom.delete(`${slot.room_id}|${slot.day}|${slot.period}`);
+      }
+      return false;
+    }
+
+    const success = backtrack(0);
+
+    if (success) {
+      if (!DataStore.data.timetable[cls]) DataStore.data.timetable[cls] = {};
+      for (const [taskId, slot] of Object.entries(result)) {
+        const task = tasks.find(t => t.id === taskId);
+        DataStore.data.timetable[cls][`${slot.day}_${slot.period}`] = {
+          courseId: task.course_id,
+          teacherId: task.teacher_id,
+          roomId: slot.room_id,
+        };
+      }
+      DataStore.save();
+      renderTeacherList();
+      renderClassTimetable();
+      renderTeacherTimetable();
+      updateTopStatus();
+    } else {
+      alert('自动排课失败：资源不足或约束过严');
+    }
+
+    btn.disabled = false;
+    btn.textContent = '自动排课';
+  }, 50);
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(DataStore.data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `排课数据_${new Date().toLocaleDateString()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!confirm('导入将覆盖当前数据，确认继续？')) return;
+      DataStore.data = data;
+      DataStore.save();
+      renderClassSelect();
+      if (DataStore.getClasses().length > 0) selectClass(DataStore.getClasses()[0].id);
+      alert('导入成功');
+    } catch(err) { alert('解析失败: ' + err.message); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+init();
+  </script>
+</body>
+</html>

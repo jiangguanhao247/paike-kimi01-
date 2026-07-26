@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>基础数据 - 智能排课系统</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="top-nav">
+    <div class="logo">
+      <div class="logo-icon">📅</div>
+      <span>智能排课系统</span>
+    </div>
+    <div class="nav-links">
+      <a href="../index.html">首页</a>
+      <a href="base-data.html" class="active">基础数据</a>
+      <a href="course-arrange.html">课程安排</a>
+      <a href="teacher-arrange.html">教师安排</a>
+      <a href="workbench.html">排课工作台</a>
+    </div>
+  </div>
+
+  <div class="breadcrumb">
+    <a href="../index.html">首页</a>
+    <span class="sep">/</span>
+    <span class="current">基础数据</span>
+  </div>
+
+  <div class="main-content">
+    <div class="toolbar">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('teachers')">教师管理</button>
+        <button class="tab" onclick="switchTab('courses')">课程管理</button>
+        <button class="tab" onclick="switchTab('classes')">班级管理</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" onclick="showAddModal()">+ 新增</button>
+      <button class="btn btn-danger" onclick="batchDelete()">批量删除</button>
+      <button class="btn" onclick="exportData()">导出</button>
+      <button class="btn" onclick="document.getElementById('import-file').click()">导入</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
+    </div>
+
+    <div class="card">
+      <table class="data-table" id="data-table">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+      <div class="batch-bar" id="batch-bar" style="display:none;">
+        <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+        <label for="select-all">全选</label>
+        <span id="selected-count"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增/编辑弹窗 -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <h3 id="modal-title">新增</h3>
+      <div id="modal-form"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveModal()">保存</button>
+        <button class="btn btn-success" onclick="showBatchAddModal()">批量新增</button>
+      </div>
+    </div>
+  </div>
+  
+
+<!-- 批量新增弹窗 -->
+<div class="modal-overlay" id="batch-modal">
+  <div class="modal">
+    <h3 id="batch-modal-title">批量新增</h3>
+    <div class="form-row" style="align-items:flex-start;">
+      <label style="padding-top:8px;">数据</label>
+      <textarea id="batch-data" rows="8" style="flex:1;padding:8px;border-radius:6px;border:1px solid #d2d2d7;font-size:13px;resize:vertical;" placeholder=""></textarea>
+    </div>
+    <div style="font-size:12px;color:#86868b;margin-left:82px;margin-top:-8px;margin-bottom:8px;" id="batch-hint"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeBatchModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveBatchAdd()">确认新增</button>
+    </div>
+  </div>
+</div>
+
+  <script src="../js/data.js"></script>
+  <script>
+let currentTab = 'teachers';
+let editingId = null;
+let selectedIds = new Set();
+
+const tabConfig = {
+  teachers: {
+    title: '教师',
+    columns: [
+      { key: 'checkbox', title: '<input type="checkbox" onchange="toggleSelectAll()">' },
+      { key: 'name', title: '姓名' },
+      { key: 'phone', title: '联系电话' },
+      { key: 'actions', title: '操作' }
+    ],
+    fields: [
+      { name: 'name', label: '姓名', type: 'text', required: true },
+      { name: 'phone', label: '联系电话', type: 'text' }
+    ]
+  },
+  courses: {
+  title: '课程',
+  columns: [
+    { key: 'checkbox', title: '<input type="checkbox" onchange="toggleSelectAll()">' },
+    { key: 'name', title: '课程名称' },
+    { key: 'type', title: '教室类型' },
+    { key: 'grades', title: '适用年级' },
+    { key: 'actions', title: '操作' }
+  ],
+  fields: [
+    { name: 'name', label: '课程名称', type: 'text', required: true },
+    { name: 'type', label: '教室类型', type: 'select', options: [{v:'normal',t:'普通教室'},{v:'lab',t:'实验室'}] },
+    { name: 'grades', label: '适用年级', type: 'grades' }
+  ]
+},
+  classes: {
+    title: '班级',
+    columns: [
+      { key: 'checkbox', title: '<input type="checkbox" onchange="toggleSelectAll()">' },
+      { key: 'name', title: '班级名称' },
+      { key: 'grade', title: '年级' },
+      { key: 'size', title: '人数' },
+      { key: 'actions', title: '操作' }
+    ],
+    fields: [
+      { name: 'name', label: '班级名称', type: 'text', required: true },
+      { name: 'grade', label: '年级', type: 'text' },
+      { name: 'size', label: '人数', type: 'number' }
+    ]
+  }
+};
+
+function switchTab(tab) {
+  currentTab = tab;
+  selectedIds.clear();
+  document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  renderTable();
+}
+
+// ========== 批量新增 ==========
+function showBatchAddModal() {
+  const titleMap = { teachers: '批量新增教师', courses: '批量新增课程', classes: '批量新增班级' };
+  const hintMap = {
+    teachers: '格式：姓名,电话  或  姓名（电话可留空）',
+    courses: '格式：课程名,教室类型  类型：normal（普通）或 lab（实验室）',
+    classes: '格式：班级名,年级,人数  例如：高一(1)班,高一,45'
+  };
+  const placeholderMap = {
+    teachers: '张三,13800138001\n李四,13800138002\n王五',
+    courses: '语文,normal\n数学,normal\n物理,lab\n化学,lab',
+    classes: '高一(1)班,高一,45\n高一(2)班,高一,42\n高一(3)班,高一,48'
+  };
+
+  document.getElementById('batch-modal-title').textContent = titleMap[currentTab];
+  document.getElementById('batch-hint').textContent = hintMap[currentTab];
+  document.getElementById('batch-data').placeholder = placeholderMap[currentTab];
+  document.getElementById('batch-data').value = '';
+  document.getElementById('batch-modal').classList.add('show');
+}
+
+function closeBatchModal() {
+  document.getElementById('batch-modal').classList.remove('show');
+}
+
+function saveBatchAdd() {
+  const raw = document.getElementById('batch-data').value.trim();
+  if (!raw) { alert('请输入数据'); return; }
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+  let added = 0;
+  let errors = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const parts = line.split(/[,，\t]/).map(s => s.trim()).filter(s => s);
+
+    if (currentTab === 'teachers') {
+      const name = parts[0] || '';
+      const phone = parts[1] || '';
+      if (!name) { errors.push('第' + (i + 1) + '行：姓名不能为空'); continue; }
+      DataStore.addTeacher({ id: DataStore.genId(), name: name, phone: phone });
+      added++;
+
+    } else if (currentTab === 'courses') {
+      const name = parts[0] || '';
+      let type = (parts[1] || 'normal').toLowerCase();
+      if (type !== 'lab') type = 'normal';
+      if (!name) { errors.push('第' + (i + 1) + '行：课程名不能为空'); continue; }
+      DataStore.addCourse({ id: DataStore.genId(), name: name, type: type, teacherId: '' });
+      added++;
+
+    } else if (currentTab === 'classes') {
+      const name = parts[0] || '';
+      const grade = parts[1] || '';
+      const size = parseInt(parts[2]) || 0;
+      if (!name) { errors.push('第' + (i + 1) + '行：班级名不能为空'); continue; }
+      DataStore.addClass({ id: DataStore.genId(), name: name, grade: grade, size: size });
+      added++;
+    }
+  }
+
+  closeBatchModal();
+  renderTable();
+
+  const tabName = currentTab === 'teachers' ? '教师' : currentTab === 'courses' ? '课程' : '班级';
+  let msg = '成功新增 ' + added + ' 条' + tabName;
+  if (errors.length > 0) msg += '\n\n失败：\n' + errors.join('\n');
+  alert(msg);
+}
+
+// 点击遮罩关闭批量弹窗
+document.getElementById('batch-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('batch-modal')) closeBatchModal();
+});
+
+function renderTable() {
+  const config = tabConfig[currentTab];
+  const thead = document.querySelector('#data-table thead');
+  const tbody = document.querySelector('#data-table tbody');
+
+  // 表头
+  thead.innerHTML = '<tr>' + config.columns.map(c => `<th>${c.title}</th>`).join('') + '</tr>';
+
+  // 数据
+  let items = [];
+  if (currentTab === 'teachers') items = DataStore.getTeachers();
+  else if (currentTab === 'courses') items = DataStore.getCourses();
+  else items = DataStore.getClasses();
+
+  tbody.innerHTML = items.map(item => {
+    const checked = selectedIds.has(item.id) ? 'checked' : '';
+    let cells = '';
+    for (const col of config.columns) {
+      if (col.key === 'checkbox') {
+        cells += `<td><input type="checkbox" class="checkbox" ${checked} onchange="toggleSelect('${item.id}')"></td>`;
+      } else if (col.key === 'actions') {
+        cells += `<td><div class="actions">
+          <a onclick="editItem('${item.id}')">编辑</a>
+          <a class="danger" onclick="deleteItem('${item.id}')">删除</a>
+        </div></td>`;
+      } else if (col.key === 'type') {
+        cells += `<td>${item[col.key] === 'lab' ? '实验室' : '普通教室'}</td>`;
+      }
+      else if (col.key === 'grades') {
+        const grades = item[col.key] || [];
+        cells += '<td>' + (grades.length > 0 ? grades.join('、') : '<span style="color:#d2d2d7;">全部</span>') + '</td>';
+      }
+      else {
+        cells += `<td>${item[col.key] || '-'}</td>`;
+      }
+    }
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  updateBatchBar();
+}
+
+function toggleSelect(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  renderTable();
+}
+
+function toggleSelectAll() {
+  let items = [];
+  if (currentTab === 'teachers') items = DataStore.getTeachers();
+  else if (currentTab === 'courses') items = DataStore.getCourses();
+  else items = DataStore.getClasses();
+
+  const allSelected = selectedIds.size === items.length && items.length > 0;
+  if (allSelected) {
+    selectedIds.clear();
+  } else {
+    items.forEach(i => selectedIds.add(i.id));
+  }
+  renderTable();
+}
+
+function updateBatchBar() {
+  const bar = document.getElementById('batch-bar');
+  const count = document.getElementById('selected-count');
+  if (selectedIds.size > 0) {
+    bar.style.display = 'flex';
+    count.textContent = `已选择 ${selectedIds.size} 项`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function showAddModal() {
+  editingId = null;
+  const config = tabConfig[currentTab];
+  document.getElementById('modal-title').textContent = '新增' + config.title;
+  buildForm(config.fields, {});
+  document.getElementById('modal').classList.add('show');
+}
+
+function editItem(id) {
+  editingId = id;
+  const config = tabConfig[currentTab];
+  let item = null;
+  if (currentTab === 'teachers') item = DataStore.getTeachers().find(x => x.id === id);
+  else if (currentTab === 'courses') item = DataStore.getCourses().find(x => x.id === id);
+  else item = DataStore.getClasses().find(x => x.id === id);
+
+  document.getElementById('modal-title').textContent = '编辑' + config.title;
+  buildForm(config.fields, item);
+  document.getElementById('modal').classList.add('show');
+}
+
+function getAllGrades() {
+  const grades = new Set();
+  DataStore.getClasses().forEach(c => { if (c.grade) grades.add(c.grade); });
+  return Array.from(grades).sort();
+}
+
+function buildForm(fields, values) {
+  const container = document.getElementById('modal-form');
+  container.innerHTML = fields.map(f => {
+    let input = '';
+    if (f.type === 'select') {
+      input = `<select id="field-${f.name}">` + 
+        f.options.map(o => `<option value="${o.v}" ${values[f.name] === o.v ? 'selected' : ''}>${o.t}</option>`).join('') +
+        '</select>';
+    } 
+    else if (f.type === 'grades') {
+  const allGrades = getAllGrades();
+  const selectedGrades = values[f.name] || [];
+  const allChecked = allGrades.length > 0 && allGrades.every(g => selectedGrades.includes(g));
+  input = '<div style="flex:1;">';
+  input += '<div style="margin-bottom:8px;"><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">' +
+    '<input type="checkbox" id="field-grades-all" ' + (allChecked ? 'checked' : '') + '> 全选</label></div>';
+  input += '<div id="field-grades-list" style="display:flex;flex-wrap:wrap;gap:8px;">';
+  allGrades.forEach(g => {
+    const checked = selectedGrades.includes(g) ? 'checked' : '';
+    input += '<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" name="field-grades" value="' + g + '" ' + checked + '>' + g + '</label>';
+  });
+  input += '</div></div>';
+}
+    else {
+      input = `<input type="${f.type}" id="field-${f.name}" value="${values[f.name] || ''}" placeholder="请输入${f.label}">`;
+    }
+    return `<div class="form-row"><label>${f.label}${f.required ? '<span style="color:#ff4d4f;">*</span>' : ''}</label>${input}</div>`;
+  }).join('');
+
+  // 绑定适用年级的“全选”逻辑
+  const gradeAll = document.getElementById('field-grades-all');
+  if (gradeAll) {
+    const gradeCheckboxes = Array.from(container.querySelectorAll('input[name="field-grades"]'));
+    const updateAllState = () => {
+      const checkedCount = gradeCheckboxes.filter(cb => cb.checked).length;
+      gradeAll.checked = checkedCount === gradeCheckboxes.length && gradeCheckboxes.length > 0;
+      gradeAll.indeterminate = checkedCount > 0 && checkedCount < gradeCheckboxes.length;
+    };
+
+    gradeAll.addEventListener('change', () => {
+      gradeCheckboxes.forEach(cb => cb.checked = gradeAll.checked);
+    });
+
+    gradeCheckboxes.forEach(cb => cb.addEventListener('change', updateAllState));
+    updateAllState();
+  }
+}
+
+function saveModal() {
+  const config = tabConfig[currentTab];
+  const data = { id: editingId || DataStore.genId() };
+
+  for (const f of config.fields) {
+  let val;
+  if (f.type === 'grades') {
+    val = Array.from(document.querySelectorAll('input[name="field-grades"]:checked')).map(cb => cb.value);
+  } else {
+    val = document.getElementById(`field-${f.name}`).value.trim();
+  }
+    if (f.required && !val) { alert(`${f.label}不能为空`); return; }
+    if (f.type === 'number') data[f.name] = parseInt(val) || 0;
+    else data[f.name] = val;
+  }
+
+  if (editingId) {
+    if (currentTab === 'teachers') DataStore.updateTeacher(editingId, data);
+    else if (currentTab === 'courses') DataStore.updateCourse(editingId, data);
+    else DataStore.updateClass(editingId, data);
+  } else {
+    if (currentTab === 'teachers') DataStore.addTeacher(data);
+    else if (currentTab === 'courses') DataStore.addCourse(data);
+    else DataStore.addClass(data);
+  }
+
+  closeModal();
+  renderTable();
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+function deleteItem(id) {
+  if (!confirm('确定删除？')) return;
+  if (currentTab === 'teachers') DataStore.deleteTeacher(id);
+  else if (currentTab === 'courses') DataStore.deleteCourse(id);
+  else DataStore.deleteClass(id);
+  selectedIds.delete(id);
+  renderTable();
+}
+
+function batchDelete() {
+  if (selectedIds.size === 0) { alert('请先选择要删除的数据'); return; }
+  if (!confirm(`确定删除选中的 ${selectedIds.size} 项数据？`)) return;
+  const ids = Array.from(selectedIds);
+  if (currentTab === 'teachers') DataStore.deleteTeachers(ids);
+  else if (currentTab === 'courses') DataStore.deleteCourses(ids);
+  else DataStore.deleteClasses(ids);
+  selectedIds.clear();
+  renderTable();
+}
+
+function exportData() {
+  const blob = new Blob([DataStore.export()], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `排课数据_${new Date().toLocaleDateString()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      if (!confirm('导入将覆盖现有数据，确认继续？')) return;
+      DataStore.import(e.target.result);
+      renderTable();
+      alert('导入成功');
+    } catch(err) { alert('导入失败: ' + err.message); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// 点击遮罩关闭
+document.getElementById('modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+renderTable();
+  </script>
+</body>
+</html>

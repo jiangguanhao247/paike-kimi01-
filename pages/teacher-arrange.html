@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教师安排 - 智能排课系统</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="top-nav">
+    <div class="logo">
+      <div class="logo-icon">📅</div>
+      <span>智能排课系统</span>
+    </div>
+    <div class="nav-links">
+      <a href="../index.html">首页</a>
+      <a href="base-data.html">基础数据</a>
+      <a href="course-arrange.html">课程安排</a>
+      <a href="teacher-arrange.html" class="active">教师安排</a>
+      <a href="workbench.html">排课工作台</a>
+    </div>
+  </div>
+
+  <div class="breadcrumb">
+    <a href="../index.html">首页</a>
+    <span class="sep">/</span>
+    <span class="current">教师安排</span>
+  </div>
+
+  <div class="main-content">
+   <div class="toolbar">
+  <div class="tabs">
+    <button class="tab active" onclick="switchView('class')">按班级查看</button>
+    <button class="tab" onclick="switchView('teacher')">按教师查看</button>
+  </div>
+  <label style="font-size:13px;color:#86868b;margin-left:12px;">年级:</label>
+  <select id="grade-select" onchange="render()"></select>
+  <div class="spacer"></div>
+  <button class="btn" onclick="downloadTemplate()">📥 下载模板</button>
+  <button class="btn" onclick="document.getElementById('upload-file').click()">📤 上传数据</button>
+  <input type="file" id="upload-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadData(this)">
+  <button class="btn btn-danger" onclick="clearAll()">全部清空</button>
+  <button class="btn btn-primary" onclick="saveAll()">保存</button>
+</div>
+
+    <div id="matrix-container"></div>
+  </div>
+
+  <script src="../js/data.js"></script>
+  <script>
+let currentView = 'class';
+
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  render();
+}
+
+function render() {
+  const container = document.getElementById('matrix-container');
+  if (currentView === 'class') {
+    renderByClass(container);
+  } else {
+    renderByTeacher(container);
+  }
+}
+
+function renderByClass(container) {
+  const classes = getFilteredClasses();
+  const allCourses = DataStore.getCourses();
+  const grade = document.getElementById('grade-select').value;
+  const courses = grade 
+  ? allCourses.filter(c => !c.grades || c.grades.length === 0 || c.grades.includes(grade))
+  : allCourses;
+  const teachers = DataStore.getTeachers();
+
+  let html = '<table class="matrix-table"><thead><tr><th>班级</th>';
+  for (const c of courses) html += `<th>${c.name}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const cls of classes) {
+    html += `<tr><td style="font-weight:500;">${cls.name}</td>`;
+    for (const c of courses) {
+      const current = DataStore.getTeacherAssign(cls.id, c.id);
+      const hours = DataStore.getCourseHours(cls.id, c.id);
+      if (hours === 0) {
+        html += '<td style="color:#d2d2d7;">-</td>';
+      } else {
+        html += `<td>
+          <select class="cell-select" id="${cls.id}-${c.id}" onchange="onChange('${cls.id}','${c.id}')">
+            <option value="">请选择</option>`;
+        for (const t of teachers) {
+          const selected = t.id === current ? 'selected' : '';
+          html += `<option value="${t.id}" ${selected}>${t.name}</option>`;
+        }
+        html += '</select></td>';
+      }
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function renderByTeacher(container) {
+  const teachers = DataStore.getTeachers();
+  const classes = DataStore.getClasses();
+  const courses = DataStore.getCourses();
+
+  let html = '<table class="matrix-table"><thead><tr><th>教师</th>';
+  for (const d of ['周一','周二','周三','周四','周五']) {
+    html += `<th>${d}</th>`;
+  }
+  html += '<th>总课时</th></tr></thead><tbody>';
+
+  for (const t of teachers) {
+    let total = 0;
+    // 统计该教师总课时
+    for (const cls of classes) {
+      for (const c of courses) {
+        if (DataStore.getTeacherAssign(cls.id, c.id) === t.id) {
+          total += DataStore.getCourseHours(cls.id, c.id);
+        }
+      }
+    }
+
+    html += `<tr><td style="font-weight:500;">${t.name}</td>`;
+    for (let d = 0; d < 5; d++) {
+      html += '<td style="font-size:12px;color:#86868b;">-</td>';
+    }
+    html += `<td style="font-weight:600;">${total}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function onChange(classId, courseId) {
+  const val = document.getElementById(`${classId}-${courseId}`).value;
+  DataStore.setTeacherAssign(classId, courseId, val);
+}
+
+function saveAll() {
+  alert('保存成功（已自动保存）');
+}
+
+
+// ========== 年级筛选 & 模板 ==========
+function getGrades() {
+  const grades = new Set();
+  DataStore.getClasses().forEach(c => { if (c.grade) grades.add(c.grade); });
+  return Array.from(grades);
+}
+
+function renderGradeSelect() {
+  const sel = document.getElementById('grade-select');
+  const grades = getGrades();
+  let html = '<option value="">全部年级</option>';
+  grades.forEach(g => html += '<option value="' + g + '">' + g + '</option>');
+  sel.innerHTML = html;
+}
+
+function getFilteredClasses() {
+  const grade = document.getElementById('grade-select').value;
+  const classes = DataStore.getClasses();
+  if (!grade) return classes;
+  return classes.filter(c => c.grade === grade);
+}
+
+function downloadTemplate() {
+  const classes = getFilteredClasses();
+  const courses = DataStore.getCourses();
+  const BOM = '\uFEFF';
+  let csv = BOM + '班级';
+  courses.forEach(c => csv += ',' + c.name);
+  csv += '\n';
+  classes.forEach(cls => {
+    csv += cls.name;
+    courses.forEach(() => csv += ',');
+    csv += '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '教师安排模板.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(',').map(c => c.trim());
+    rows.push(cells);
+  }
+  return { headers, rows };
+}
+
+function uploadData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const { headers, rows } = parseCSV(e.target.result);
+      const courses = DataStore.getCourses();
+      const teachers = DataStore.getTeachers();
+      let updated = 0;
+
+      for (const row of rows) {
+        const className = row[0];
+        if (!className) continue;
+        const cls = DataStore.getClasses().find(c => c.name === className);
+        if (!cls) continue;
+
+        for (let i = 1; i < headers.length; i++) {
+          const courseName = headers[i];
+          const course = courses.find(c => c.name === courseName);
+          if (!course) continue;
+          const teacherName = row[i];
+          if (!teacherName) continue;
+          const teacher = teachers.find(t => t.name === teacherName);
+          if (teacher) {
+            DataStore.setTeacherAssign(cls.id, course.id, teacher.id);
+            updated++;
+          }
+        }
+      }
+      render();
+      alert('上传成功，共更新 ' + updated + ' 条教师安排');
+    } catch (err) {
+      alert('解析失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+renderGradeSelect();
+
+function clearAll() {
+  if (!confirm('确定清空所有教师安排？')) return;
+  for (const cls of DataStore.getClasses()) {
+    DataStore.clearTeacherAssign(cls.id);
+  }
+  render();
+}
+
+render();
+  </script>
+</body>
+</html>

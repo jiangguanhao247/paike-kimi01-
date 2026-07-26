@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>课程安排 - 智能排课系统</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="top-nav">
+    <div class="logo">
+      <div class="logo-icon">📅</div>
+      <span>智能排课系统</span>
+    </div>
+    <div class="nav-links">
+      <a href="../index.html">首页</a>
+      <a href="base-data.html">基础数据</a>
+      <a href="course-arrange.html" class="active">课程安排</a>
+      <a href="teacher-arrange.html">教师安排</a>
+      <a href="workbench.html">排课工作台</a>
+    </div>
+  </div>
+
+  <div class="breadcrumb">
+    <a href="../index.html">首页</a>
+    <span class="sep">/</span>
+    <span class="current">课程安排</span>
+  </div>
+
+  <div class="main-content">
+    <div class="toolbar">
+  <div class="tabs">
+    <button class="tab active">课程课时</button>
+    <button class="tab" onclick="location.href='teacher-arrange.html'">教师安排</button>
+  </div>
+  <label style="font-size:13px;color:#86868b;margin-left:12px;">年级:</label>
+  <select id="grade-select" onchange="render()"></select>
+  <div class="spacer"></div>
+  <button class="btn" onclick="downloadTemplate()">📥 下载模板</button>
+  <button class="btn" onclick="document.getElementById('upload-file').click()">📤 上传数据</button>
+  <input type="file" id="upload-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="uploadData(this)">
+  <button class="btn btn-danger" onclick="clearAll()">全部清空</button>
+  <button class="btn btn-primary" onclick="saveAll()">保存</button>
+</div>
+
+    <div id="matrix-container"></div>
+  </div>
+
+  <!-- 批量设置弹窗 -->
+  <div class="modal-overlay" id="batch-modal">
+    <div class="modal">
+      <h3>批量设置课时</h3>
+      <div class="form-row">
+        <label>课时数</label>
+        <input type="number" id="batch-hours" value="5" min="0" max="20">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeBatchModal()">取消</button>
+        <button class="btn btn-primary" onclick="confirmBatchSet()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/data.js"></script>
+  <script>
+let changedCells = new Set();
+
+function render() {
+  const classes = getFilteredClasses();
+  const allCourses = DataStore.getCourses();
+  const grade = document.getElementById('grade-select').value;
+  const courses = grade ? allCourses.filter(c => !c.grades || c.grades.length === 0 || c.grades.includes(grade)) : allCourses;
+  const container = document.getElementById('matrix-container');
+
+  let html = '<table class="matrix-table"><thead><tr><th>班级</th>';
+  for (const c of courses) {
+    html += `<th>${c.name}<br><span style="font-size:11px;color:#86868b;font-weight:400;">${c.type==='lab'?'实验室':'正课'}</span></th>`;
+  }
+  html += '<th>操作</th></tr></thead><tbody>';
+
+  // 批量设置行
+  html += '<tr style="background:#f6ffed;"><td style="font-weight:600;">批量设置</td>';
+  for (const c of courses) {
+    html += `<td><input type="number" class="cell-input" id="batch-${c.id}" value="" placeholder="--" min="0" max="20" onchange="onBatchChange('${c.id}')"></td>`;
+  }
+  html += '<td><button class="btn btn-sm" onclick="applyBatch()">应用</button></td></tr>';
+
+  for (const cls of classes) {
+    html += `<tr><td style="font-weight:500;">${cls.name}</td>`;
+    for (const c of courses) {
+      const hours = DataStore.getCourseHours(cls.id, c.id);
+      const val = hours > 0 ? hours : '';
+      html += `<td><input type="number" class="cell-input" id="${cls.id}-${c.id}" value="${val}" placeholder="--" min="0" max="20" onchange="onCellChange('${cls.id}','${c.id}')"></td>`;
+    }
+    html += `<td><button class="btn btn-sm btn-danger" onclick="clearClass('${cls.id}')">清空</button></td></tr>`;
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function onCellChange(classId, courseId) {
+  changedCells.add(`${classId}-${courseId}`);
+}
+
+function onBatchChange(courseId) {
+  // 标记批量行变更
+}
+
+function saveAll() {
+  const classes = DataStore.getClasses();
+  const courses = DataStore.getCourses();
+  for (const cls of classes) {
+    for (const c of courses) {
+      const input = document.getElementById(`${cls.id}-${c.id}`);
+      if (input) {
+        const val = parseInt(input.value) || 0;
+        DataStore.setCourseHours(cls.id, c.id, val);
+      }
+    }
+  }
+  changedCells.clear();
+  alert('保存成功');
+}
+
+
+// ========== 年级筛选 & 模板 ==========
+function getGrades() {
+  const grades = new Set();
+  DataStore.getClasses().forEach(c => { if (c.grade) grades.add(c.grade); });
+  return Array.from(grades);
+}
+
+function renderGradeSelect() {
+  const sel = document.getElementById('grade-select');
+  const grades = getGrades();
+  let html = '<option value="">全部年级</option>';
+  grades.forEach(g => html += '<option value="' + g + '">' + g + '</option>');
+  sel.innerHTML = html;
+}
+
+function getFilteredClasses() {
+  const grade = document.getElementById('grade-select').value;
+  const classes = DataStore.getClasses();
+  if (!grade) return classes;
+  return classes.filter(c => c.grade === grade);
+}
+
+// 下载 CSV 模板（Excel 可直接打开）
+function downloadTemplate() {
+  const classes = getFilteredClasses();
+  const courses = DataStore.getCourses();
+  const BOM = '\uFEFF';
+  let csv = BOM + '班级';
+  courses.forEach(c => csv += ',' + c.name);
+  csv += '\n';
+  classes.forEach(cls => {
+    csv += cls.name;
+    courses.forEach(() => csv += ',');
+    csv += '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '课程课时模板.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// 解析 CSV
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(',').map(c => c.trim());
+    rows.push(cells);
+  }
+  return { headers, rows };
+}
+
+// 上传数据
+function uploadData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const { headers, rows } = parseCSV(e.target.result);
+      const courses = DataStore.getCourses();
+      let updated = 0;
+
+      for (const row of rows) {
+        const className = row[0];
+        if (!className) continue;
+        const cls = DataStore.getClasses().find(c => c.name === className);
+        if (!cls) continue;
+
+        for (let i = 1; i < headers.length; i++) {
+          const courseName = headers[i];
+          const course = courses.find(c => c.name === courseName);
+          if (!course) continue;
+          const val = parseInt(row[i]);
+          if (!isNaN(val) && val >= 0) {
+            DataStore.setCourseHours(cls.id, course.id, val);
+            updated++;
+          }
+        }
+      }
+      render();
+      alert('上传成功，共更新 ' + updated + ' 条课时记录');
+    } catch (err) {
+      alert('解析失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// 初始化年级下拉
+renderGradeSelect();
+
+function clearClass(classId) {
+  if (!confirm('确定清空该班级的所有课时设置？')) return;
+  DataStore.clearCourseHours(classId);
+  render();
+}
+
+function clearAll() {
+  if (!confirm('确定清空所有班级的课时设置？')) return;
+  for (const cls of DataStore.getClasses()) {
+    DataStore.clearCourseHours(cls.id);
+  }
+  render();
+}
+
+function batchSet() {
+  document.getElementById('batch-modal').classList.add('show');
+}
+
+function closeBatchModal() {
+  document.getElementById('batch-modal').classList.remove('show');
+}
+
+function confirmBatchSet() {
+  const hours = parseInt(document.getElementById('batch-hours').value) || 0;
+  const classes = DataStore.getClasses();
+  const courses = DataStore.getCourses();
+  for (const cls of classes) {
+    for (const c of courses) {
+      DataStore.setCourseHours(cls.id, c.id, hours);
+    }
+  }
+  closeBatchModal();
+  render();
+  alert('批量设置完成');
+}
+
+function applyBatch() {
+  const courses = DataStore.getCourses();
+  const classes = DataStore.getClasses();
+  for (const c of courses) {
+    const val = document.getElementById(`batch-${c.id}`).value;
+    if (val === '') continue;
+    const hours = parseInt(val) || 0;
+    for (const cls of classes) {
+      DataStore.setCourseHours(cls.id, c.id, hours);
+    }
+  }
+  render();
+  alert('批量应用完成');
+}
+
+document.getElementById('batch-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('batch-modal')) closeBatchModal();
+});
+
+render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,654 @@
+/* 智能排课系统 - 全局样式 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f0f2f5;
+  color: #1d1d1f;
+  min-height: 100vh;
+}
+
+/* 顶部导航 */
+.top-nav {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.top-nav .logo {
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.top-nav .logo-icon {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+
+.top-nav .nav-links {
+  display: flex;
+  gap: 4px;
+}
+
+.top-nav .nav-links a {
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.top-nav .nav-links a:hover,
+.top-nav .nav-links a.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+
+/* 面包屑 */
+.breadcrumb {
+  padding: 12px 24px;
+  font-size: 13px;
+  color: #86868b;
+  background: #fff;
+  border-bottom: 1px solid #e8e8ed;
+}
+
+.breadcrumb a {
+  color: #86868b;
+  text-decoration: none;
+}
+
+.breadcrumb a:hover { color: #0071e3; }
+
+.breadcrumb .sep { margin: 0 8px; color: #d2d2d7; }
+
+.breadcrumb .current { color: #1d1d1f; font-weight: 500; }
+
+/* 主内容区 */
+.main-content {
+  padding: 20px 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar .tabs {
+  display: flex;
+  gap: 2px;
+  background: #e8e8ed;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.toolbar .tabs .tab {
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: #515154;
+  font-weight: 500;
+}
+
+.toolbar .tabs .tab.active {
+  background: #fff;
+  color: #1d1d1f;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.toolbar .spacer { flex: 1; }
+
+/* 按钮 */
+.btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid #d2d2d7;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  color: #1d1d1f;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:hover { background: #f5f5f7; }
+.btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+.btn-primary:hover { background: #40a9ff; }
+.btn-danger { color: #ff4d4f; border-color: #ff4d4f; }
+.btn-danger:hover { background: #fff1f0; }
+.btn-success { background: #52c41a; color: #fff; border-color: #52c41a; }
+.btn-success:hover { background: #73d13d; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+
+select, input[type="text"], input[type="number"] {
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #d2d2d7;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+}
+
+select:focus, input:focus { border-color: #1890ff; }
+
+/* 卡片 */
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 20px;
+}
+
+/* 表格 */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.data-table th {
+  color: #86868b;
+  font-weight: 500;
+  font-size: 12px;
+  background: #fafafa;
+}
+
+.data-table tr:hover td { background: #f5f5f7; }
+
+.data-table .checkbox {
+  width: 16px; height: 16px;
+  cursor: pointer;
+}
+
+.data-table .actions {
+  display: flex;
+  gap: 8px;
+}
+
+.data-table .actions a {
+  color: #1890ff;
+  text-decoration: none;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.data-table .actions a:hover { text-decoration: underline; }
+
+.data-table .actions a.danger { color: #ff4d4f; }
+
+/* 分页/批量操作栏 */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #86868b;
+}
+
+/* 弹窗 */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+
+.modal h3 {
+  font-size: 16px;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.modal .form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.modal .form-row label {
+  font-size: 13px;
+  color: #515154;
+  width: 70px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.modal .form-row input,
+.modal .form-row select {
+  flex: 1;
+  padding: 8px 10px;
+}
+
+.modal .modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 课程安排/教师安排 矩阵表格 */
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.matrix-table th,
+.matrix-table td {
+  padding: 10px 8px;
+  text-align: center;
+  border: 1px solid #f0f0f0;
+  min-width: 80px;
+}
+
+.matrix-table th {
+  background: #fafafa;
+  color: #515154;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.matrix-table td:first-child,
+.matrix-table th:first-child {
+  min-width: 100px;
+  font-weight: 500;
+  background: #fafafa;
+}
+
+.matrix-table .cell-input {
+  width: 60px;
+  padding: 6px 4px;
+  text-align: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 13px;
+  background: transparent;
+  outline: none;
+}
+
+.matrix-table .cell-input:hover,
+.matrix-table .cell-input:focus {
+  border-color: #1890ff;
+  background: #fff;
+}
+
+.matrix-table .cell-select {
+  width: 90px;
+  padding: 6px 4px;
+  text-align: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 13px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+
+.matrix-table .cell-select:hover,
+.matrix-table .cell-select:focus {
+  border-color: #1890ff;
+  background: #fff;
+}
+
+.matrix-table .cell-value {
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.matrix-table .cell-value:hover {
+  background: #f0f7ff;
+}
+
+.matrix-table .cell-value .edit-icon {
+  font-size: 11px;
+  color: #1890ff;
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.matrix-table td:hover .cell-value .edit-icon {
+  opacity: 1;
+}
+
+/* 排课工作台 */
+.workbench-main {
+  display: flex;
+  gap: 14px;
+  min-height: 600px;
+}
+
+.left-panel {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.center-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.right-panel {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.panel-box .panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #1d1d1f;
+}
+
+.teacher-group {
+  border: 1px solid #e8e8ed;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.teacher-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #f5f5f7;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.teacher-header .arrow {
+  transition: transform 0.2s;
+  font-size: 11px;
+  color: #86868b;
+}
+
+.teacher-group.expanded .teacher-header .arrow {
+  transform: rotate(90deg);
+}
+
+.teacher-courses {
+  display: none;
+  padding: 6px;
+  gap: 6px;
+  flex-direction: column;
+}
+
+.teacher-group.expanded .teacher-courses {
+  display: flex;
+}
+
+.drag-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #d2d2d7;
+  background: #fff;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s;
+  font-size: 12px;
+}
+
+.drag-card:hover {
+  background: #f5f5f7;
+  border-color: #1890ff;
+}
+
+.drag-card.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.drag-card .course-name { font-weight: 600; }
+.drag-card .remain { font-size: 11px; color: #86868b; }
+.drag-card .remain.zero { color: #52c41a; font-weight: 600; }
+.drag-card[draggable="false"] { opacity: 0.35; cursor: not-allowed; }
+
+.timetable-grid {
+  display: grid;
+  grid-template-columns: 48px repeat(5, 1fr);
+  gap: 3px;
+}
+
+.timetable-grid .th {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 4px;
+  color: #86868b;
+  background: #f5f5f7;
+  border-radius: 8px;
+}
+
+.timetable-grid .period-label {
+  font-size: 11px;
+  text-align: center;
+  padding: 8px 2px;
+  color: #86868b;
+  background: #f5f5f7;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timetable-grid .cell {
+  min-height: 68px;
+  padding: 5px;
+  border-radius: 8px;
+  border: 1px solid #e8e8ed;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  background: #fff;
+  position: relative;
+  transition: all 0.15s;
+}
+
+.timetable-grid .cell.drag-over {
+  border-color: #1890ff;
+  background: #f0f7ff;
+  box-shadow: inset 0 0 0 2px #1890ff;
+}
+
+.timetable-grid .cell.drag-invalid {
+  border-color: #ff4d4f;
+  background: #fff1f0;
+}
+
+.timetable-grid .cell .course-block {
+  padding: 5px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.timetable-grid .cell .course-block .teacher-name { font-size: 11px; font-weight: 400; opacity: 0.75; }
+.timetable-grid .cell .course-block .room-name { font-size: 10px; font-weight: 400; opacity: 0.6; }
+
+.timetable-grid .cell .delete-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.timetable-grid .cell:hover .delete-btn { display: flex; }
+
+.teacher-timetable {
+  display: grid;
+  grid-template-columns: 42px repeat(5, 1fr);
+  gap: 2px;
+}
+
+.teacher-timetable .th {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  padding: 7px 3px;
+  color: #86868b;
+  background: #f5f5f7;
+  border-radius: 6px;
+}
+
+.teacher-timetable .period-label {
+  font-size: 10px;
+  text-align: center;
+  padding: 6px 2px;
+  color: #86868b;
+  background: #f5f5f7;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.teacher-timetable .cell {
+  min-height: 50px;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid #e8e8ed;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.teacher-timetable .cell.empty { background: transparent; border-style: dashed; }
+
+.teacher-timetable .cell .entry {
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.teacher-timetable .cell .entry .class-name { font-size: 10px; font-weight: 400; opacity: 0.75; }
+
+.empty-tip {
+  text-align: center;
+  padding: 50px 20px;
+  color: #86868b;
+  font-size: 14px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #86868b;
+  text-align: center;
+  padding: 8px;
+}
+
+.status-bar {
+  font-size: 13px;
+  color: #86868b;
+}
+.status-bar .ok { color: #52c41a; font-weight: 600; }
+.status-bar .warn { color: #faad14; font-weight: 600; }
+
+@media (max-width: 960px) {
+  .workbench-main { flex-direction: column; }
+  .left-panel, .right-panel { width: 100%; }
+  .top-nav { flex-wrap: wrap; height: auto; padding: 10px 16px; }
+}
