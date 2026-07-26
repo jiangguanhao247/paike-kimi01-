@@ -258,10 +258,14 @@ function confirmBatchSet() {
 }
 
 function applyBatch() {
-  const courses = DataStore.getCourses();
-  const classes = DataStore.getClasses();
+  const allCourses = DataStore.getCourses();
+  const grade = document.getElementById('grade-select').value;
+  const courses = grade ? allCourses.filter(c => !c.grades || c.grades.length === 0 || c.grades.includes(grade)) : allCourses;
+  const classes = getFilteredClasses();
   for (const c of courses) {
-    const val = document.getElementById(`batch-${c.id}`).value;
+    const el = document.getElementById(`batch-${c.id}`);
+    if (!el) continue;
+    const val = el.value;
     if (val === '') continue;
     const hours = parseInt(val) || 0;
     for (const cls of classes) {
