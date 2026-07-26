@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>排课工作台 - 智能排课系统</title>
   <link rel="stylesheet" href="../css/style.css">
+<base target="_blank">
 </head>
 <body>
   <div class="top-nav">
@@ -153,7 +154,9 @@ function canPlace(courseId, classId, day, period) {
   }
   const hours = DataStore.getCourseHours(classId, courseId);
   if (assigned >= hours) return false;
-  if (isTeacherBusy(course.teacherId, day, period, classId)) return false;
+  const assignedTeacherId = DataStore.getTeacherAssign(classId, courseId);
+    if (!assignedTeacherId) return false;
+    if (isTeacherBusy(assignedTeacherId, day, period, classId)) return false;
   const roomId = findAvailableRoom(courseId, classId, day, period);
   if (!roomId) return false;
   return true;
@@ -406,7 +409,7 @@ function addEntry(day, period, courseId) {
     DataStore.data.timetable[currentClassId] = {};
   }
   DataStore.data.timetable[currentClassId][`${day}_${period}`] = {
-    courseId, teacherId: course.teacherId, roomId
+    courseId, teacherId: DataStore.getTeacherAssign(currentClassId, courseId), roomId
   };
   DataStore.save();
   renderTeacherList();
@@ -473,7 +476,7 @@ function autoSchedule() {
         tasks.push({
           id: `${cls}_${course.id}_${i}`,
           course_id: course.id,
-          teacher_id: course.teacherId,
+          teacher_id: DataStore.getTeacherAssign(cls, course.id),
           room_type: course.type,
           class_size: DataStore.getClasses().find(c => c.id === cls).size,
         });
