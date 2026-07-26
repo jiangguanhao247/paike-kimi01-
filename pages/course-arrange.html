@@ -52,7 +52,7 @@
       <h3>批量设置课时</h3>
       <div class="form-row">
         <label>课时数</label>
-        <input type="number" id="batch-hours" value="5" min="0" max="20">
+        <input type="number" step="0.5" id="batch-hours" value="5" min="0" max="20">
       </div>
       <div class="modal-actions">
         <button class="btn" onclick="closeBatchModal()">取消</button>
@@ -61,7 +61,23 @@
     </div>
   </div>
 
-  <script src="../js/data.js"></script>
+    <!-- 单课程批量设置弹窗（列出当前年级的班级并支持全选） -->
+    <div class="modal-overlay" id="course-batch-modal">
+      <div class="modal">
+        <h3>为 <span id="course-batch-title"></span> 批量设置</h3>
+        <div class="form-row">
+          <label>课时数</label>
+          <input type="number" step="0.5" id="course-batch-hours" value="0" min="0" max="20">
+        </div>
+        <div id="course-batch-list" style="max-height:320px;overflow:auto;margin-left:70px;margin-top:6px;margin-bottom:6px;"></div>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeCourseBatch()">取消</button>
+          <button class="btn btn-primary" onclick="confirmCourseBatch()">应用</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../js/data.js"></script>
   <script>
 let changedCells = new Set();
 
@@ -81,7 +97,8 @@ function render() {
   // 批量设置行
   html += '<tr style="background:#f6ffed;"><td style="font-weight:600;">批量设置</td>';
   for (const c of courses) {
-    html += `<td><input type="number" class="cell-input" id="batch-${c.id}" value="" placeholder="--" min="0" max="20" onchange="onBatchChange('${c.id}')"></td>`;
+    html += `<td><div style="display:flex;align-items:center;gap:6px;"><input type=\"number\" step=\"0.5\" class=\"cell-input\" id=\"batch-${c.id}\" value=\"\" placeholder=\"--\" min=\"0\" max=\"20\" onchange=\"onBatchChange('${c.id}')\">` +
+      `<button class=\"btn btn-sm\" onclick=\"openCourseBatch('${c.id}','${c.name}')\">批量</button></div></td>`;
   }
   html += '<td><button class="btn btn-sm" onclick="applyBatch()">应用</button></td></tr>';
 
@@ -90,7 +107,7 @@ function render() {
     for (const c of courses) {
       const hours = DataStore.getCourseHours(cls.id, c.id);
       const val = hours > 0 ? hours : '';
-      html += `<td><input type="number" class="cell-input" id="${cls.id}-${c.id}" value="${val}" placeholder="--" min="0" max="20" onchange="onCellChange('${cls.id}','${c.id}')"></td>`;
+      html += `<td><input type="number" step="0.5" class="cell-input" id="${cls.id}-${c.id}" value="${val}" placeholder="--" min="0" max="20" onchange="onCellChange('${cls.id}','${c.id}')"></td>`;
     }
     html += `<td><button class="btn btn-sm btn-danger" onclick="clearClass('${cls.id}')">清空</button></td></tr>`;
   }
@@ -114,7 +131,7 @@ function saveAll() {
     for (const c of courses) {
       const input = document.getElementById(`${cls.id}-${c.id}`);
       if (input) {
-        const val = parseInt(input.value) || 0;
+        const val = parseFloat(input.value) || 0;
         DataStore.setCourseHours(cls.id, c.id, val);
       }
     }
@@ -201,7 +218,7 @@ function uploadData(input) {
           const courseName = headers[i];
           const course = courses.find(c => c.name === courseName);
           if (!course) continue;
-          const val = parseInt(row[i]);
+          const val = parseFloat(row[i]);
           if (!isNaN(val) && val >= 0) {
             DataStore.setCourseHours(cls.id, course.id, val);
             updated++;
@@ -244,7 +261,7 @@ function closeBatchModal() {
 }
 
 function confirmBatchSet() {
-  const hours = parseInt(document.getElementById('batch-hours').value) || 0;
+  const hours = parseFloat(document.getElementById('batch-hours').value) || 0;
   const classes = DataStore.getClasses();
   const courses = DataStore.getCourses();
   for (const cls of classes) {
@@ -267,13 +284,77 @@ function applyBatch() {
     if (!el) continue;
     const val = el.value;
     if (val === '') continue;
-    const hours = parseInt(val) || 0;
+    const hours = parseFloat(val) || 0;
     for (const cls of classes) {
       DataStore.setCourseHours(cls.id, c.id, hours);
     }
   }
   render();
   alert('批量应用完成');
+}
+
+// ========== 单课程批量设置弹窗（带班级列表与全选） ==========
+function openCourseBatch(courseId, courseName) {
+  const modal = document.getElementById('course-batch-modal');
+  document.getElementById('course-batch-title').textContent = courseName;
+  const hoursInput = document.getElementById('course-batch-hours');
+  hoursInput.step = '0.5';
+  const srcInput = document.getElementById(`batch-${courseId}`);
+  hoursInput.value = srcInput ? srcInput.value : '';
+
+  const list = document.getElementById('course-batch-list');
+  list.innerHTML = '';
+  const classes = getFilteredClasses();
+  // 顶部全选
+  const allBox = document.createElement('div');
+  allBox.style.marginBottom = '8px';
+  allBox.innerHTML = `<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-left:0;"><input type="checkbox" id="course-batch-all"> 全选</label>`;
+  list.appendChild(allBox);
+
+  classes.forEach(cls => {
+    const row = document.createElement('div');
+    row.style.marginBottom = '6px';
+    row.innerHTML = `<label style="display:flex;align-items:center;gap:8px;font-size:13px;">` +
+      `<input type="checkbox" name="course-batch-class" value="${cls.id}"> ${cls.name}</label>`;
+    list.appendChild(row);
+  });
+
+  // 绑定全选逻辑
+  const allCheckbox = document.getElementById('course-batch-all');
+  const classCheckboxes = Array.from(list.querySelectorAll('input[name="course-batch-class"]'));
+  const updateAllState = () => {
+    const checkedCount = classCheckboxes.filter(cb => cb.checked).length;
+    allCheckbox.checked = checkedCount === classCheckboxes.length && classCheckboxes.length > 0;
+    allCheckbox.indeterminate = checkedCount > 0 && checkedCount < classCheckboxes.length;
+  };
+  if (allCheckbox) {
+    allCheckbox.addEventListener('change', () => classCheckboxes.forEach(cb => cb.checked = allCheckbox.checked));
+  }
+  classCheckboxes.forEach(cb => cb.addEventListener('change', updateAllState));
+  updateAllState();
+
+  // 保存当前 courseId 到 modal 上用于确认时读取
+  modal.dataset.courseId = courseId;
+  modal.classList.add('show');
+}
+
+function closeCourseBatch() {
+  document.getElementById('course-batch-modal').classList.remove('show');
+}
+
+function confirmCourseBatch() {
+  const modal = document.getElementById('course-batch-modal');
+  const courseId = modal.dataset.courseId;
+  const hours = parseFloat(document.getElementById('course-batch-hours').value) || 0;
+  const checked = Array.from(document.querySelectorAll('input[name="course-batch-class"]:checked')).map(cb => cb.value);
+  if (!courseId) { alert('无效的课程'); return; }
+  if (checked.length === 0) { alert('请先选择至少一个班级'); return; }
+  for (const clsId of checked) {
+    DataStore.setCourseHours(clsId, courseId, hours);
+  }
+  closeCourseBatch();
+  render();
+  alert('已应用到选中班级');
 }
 
 document.getElementById('batch-modal').addEventListener('click', (e) => {

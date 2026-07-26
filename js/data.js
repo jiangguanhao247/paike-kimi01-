@@ -47,6 +47,8 @@ const DataStore = {
       courseHours: {},
       // 教师安排: teacherAssign[classId][courseId] = teacherId
       teacherAssign: {},
+      // 单双周规则
+      weekRules: [],
       // 排课结果
       timetable: {},
     };
@@ -111,6 +113,23 @@ const DataStore = {
   },
   deleteClasses(ids) {
     this.data.classes = this.data.classes.filter(x => !ids.includes(x.id));
+    this.save();
+  },
+
+  // 单双周规则
+  getWeekRules() { return this.data.weekRules; },
+  addWeekRule(r) { this.data.weekRules.push(r); this.save(); },
+  updateWeekRule(id, updates) {
+    const item = this.data.weekRules.find(x => x.id === id);
+    if (item) Object.assign(item, updates);
+    this.save();
+  },
+  deleteWeekRule(id) {
+    this.data.weekRules = this.data.weekRules.filter(x => x.id !== id);
+    this.save();
+  },
+  deleteWeekRules(ids) {
+    this.data.weekRules = this.data.weekRules.filter(x => !ids.includes(x.id));
     this.save();
   },
 

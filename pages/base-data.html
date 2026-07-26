@@ -33,9 +33,11 @@
         <button class="tab active" onclick="switchTab('teachers')">教师管理</button>
         <button class="tab" onclick="switchTab('courses')">课程管理</button>
         <button class="tab" onclick="switchTab('classes')">班级管理</button>
+        <button class="tab" onclick="switchTab('weekRules')">单双周规则</button>
       </div>
       <div class="spacer"></div>
       <button class="btn btn-primary" onclick="showAddModal()">+ 新增</button>
+      <button id="batch-add-btn" class="btn btn-success" onclick="showBatchAddModal()">批量新增</button>
       <button class="btn btn-danger" onclick="batchDelete()">批量删除</button>
       <button class="btn" onclick="exportData()">导出</button>
       <button class="btn" onclick="document.getElementById('import-file').click()">导入</button>
@@ -134,6 +136,27 @@ const tabConfig = {
       { name: 'grade', label: '年级', type: 'text' },
       { name: 'size', label: '人数', type: 'number' }
     ]
+  },
+  weekRules: {
+    title: '单双周规则',
+    columns: [
+      { key: 'checkbox', title: '<input type="checkbox" onchange="toggleSelectAll()">' },
+      { key: 'scopeRegular', title: '范围' },
+      { key: 'school', title: '校区' },
+      { key: 'grade', title: '年级' },
+      { key: 'classes', title: '班级' },
+      { key: 'singleWeekCourse', title: '单周' },
+      { key: 'doubleWeekCourse', title: '双周' },
+      { key: 'actions', title: '操作' }
+    ],
+    fields: [
+      { name: 'scopeRegular', label: '范围 正课', type: 'checkbox' },
+      { name: 'school', label: '校区', type: 'select', options: [{v:'本校区',t:'本校区'}] },
+      { name: 'grade', label: '年级', type: 'gradeSelect' },
+      { name: 'classIds', label: '班级', type: 'classButtons' },
+      { name: 'singleWeekCourse', label: '单周', type: 'course' },
+      { name: 'doubleWeekCourse', label: '双周', type: 'course' }
+    ]
   }
 };
 
@@ -142,6 +165,7 @@ function switchTab(tab) {
   selectedIds.clear();
   document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
+  document.getElementById('batch-add-btn').style.display = tab === 'weekRules' ? 'none' : 'inline-flex';
   renderTable();
 }
 
@@ -233,6 +257,7 @@ function renderTable() {
   let items = [];
   if (currentTab === 'teachers') items = DataStore.getTeachers();
   else if (currentTab === 'courses') items = DataStore.getCourses();
+  else if (currentTab === 'weekRules') items = DataStore.getWeekRules();
   else items = DataStore.getClasses();
 
   tbody.innerHTML = items.map(item => {
@@ -248,6 +273,20 @@ function renderTable() {
         </div></td>`;
       } else if (col.key === 'type') {
         cells += `<td>${item[col.key] === 'lab' ? '实验室' : '普通教室'}</td>`;
+      }
+      else if (col.key === 'scopeRegular') {
+        cells += `<td>${item[col.key] ? '正课' : '-'}</td>`;
+      }
+      else if (col.key === 'classes') {
+        const names = (item[col.key] || []).map(cid => {
+          const cls = DataStore.getClasses().find(x => x.id === cid);
+          return cls ? cls.name : cid;
+        });
+        cells += `<td>${names.length ? names.join('、') : '-'}</td>`;
+      }
+      else if (col.key === 'singleWeekCourse' || col.key === 'doubleWeekCourse') {
+        const course = DataStore.getCourses().find(x => x.id === item[col.key]);
+        cells += `<td>${course ? course.name : '-'}</td>`;
       }
       else if (col.key === 'grades') {
         const grades = item[col.key] || [];
@@ -273,6 +312,7 @@ function toggleSelectAll() {
   let items = [];
   if (currentTab === 'teachers') items = DataStore.getTeachers();
   else if (currentTab === 'courses') items = DataStore.getCourses();
+  else if (currentTab === 'weekRules') items = DataStore.getWeekRules();
   else items = DataStore.getClasses();
 
   const allSelected = selectedIds.size === items.length && items.length > 0;
@@ -309,6 +349,7 @@ function editItem(id) {
   let item = null;
   if (currentTab === 'teachers') item = DataStore.getTeachers().find(x => x.id === id);
   else if (currentTab === 'courses') item = DataStore.getCourses().find(x => x.id === id);
+  else if (currentTab === 'weekRules') item = DataStore.getWeekRules().find(x => x.id === id);
   else item = DataStore.getClasses().find(x => x.id === id);
 
   document.getElementById('modal-title').textContent = '编辑' + config.title;
@@ -346,6 +387,29 @@ function buildForm(fields, values) {
   });
   input += '</div></div>';
 }
+    else if (f.type === 'checkbox') {
+      input = `<input type="checkbox" id="field-${f.name}" ${values[f.name] ? 'checked' : ''}>`;
+    }
+    else if (f.type === 'gradeSelect') {
+      const grades = getAllGrades();
+      input = `<select id="field-${f.name}">` +
+        `<option value="">请选择</option>` +
+        grades.map(g => `<option value="${g}" ${values[f.name] === g ? 'selected' : ''}>${g}</option>`).join('') +
+        `</select>`;
+    }
+    else if (f.type === 'classButtons') {
+      const selectedGrade = values.grade || document.getElementById('field-grade')?.value || '';
+      const classes = selectedGrade ? DataStore.getClasses().filter(c => c.grade === selectedGrade) : DataStore.getClasses();
+      const selectedIds = values[f.name] || [];
+      input = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
+      input += '<button type="button" id="class-select-all" class="btn btn-sm" style="padding:4px 10px;">全选</button>';
+      classes.forEach(cls => {
+        const active = selectedIds.includes(cls.id) ? ' active' : '';
+        input += `<button type="button" class="btn btn-sm class-toggle${active}" data-class-id="${cls.id}" style="padding:4px 10px;">${cls.name}</button>`;
+      });
+      input += `<input type="hidden" id="field-${f.name}" value="${selectedIds.join(',')}">`;
+      input += '</div>';
+    }
     else {
       input = `<input type="${f.type}" id="field-${f.name}" value="${values[f.name] || ''}" placeholder="请输入${f.label}">`;
     }
@@ -369,6 +433,36 @@ function buildForm(fields, values) {
     gradeCheckboxes.forEach(cb => cb.addEventListener('change', updateAllState));
     updateAllState();
   }
+
+  const classSelectAll = document.getElementById('class-select-all');
+  const classToggles = Array.from(container.querySelectorAll('.class-toggle'));
+  if (classSelectAll && classToggles.length) {
+    const updateClassHidden = () => {
+      const selected = classToggles.filter(btn => btn.classList.contains('active')).map(btn => btn.dataset.classId);
+      const hidden = document.getElementById('field-classIds');
+      if (hidden) hidden.value = selected.join(',');
+      classSelectAll.textContent = classToggles.every(btn => btn.classList.contains('active')) ? '取消全选' : '全选';
+    };
+    classToggles.forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        updateClassHidden();
+      });
+    });
+    classSelectAll.addEventListener('click', () => {
+      const selectAll = !classToggles.every(btn => btn.classList.contains('active'));
+      classToggles.forEach(btn => btn.classList.toggle('active', selectAll));
+      updateClassHidden();
+    });
+    updateClassHidden();
+  }
+
+  const gradeField = document.getElementById('field-grade');
+  if (gradeField) {
+    gradeField.addEventListener('change', () => {
+      if (fields.some(f => f.type === 'classButtons')) buildForm(fields, values);
+    });
+  }
 }
 
 function saveModal() {
@@ -382,6 +476,15 @@ function saveModal() {
   } else {
     val = document.getElementById(`field-${f.name}`).value.trim();
   }
+    if (f.type === 'checkbox') {
+      data[f.name] = document.getElementById(`field-${f.name}`).checked;
+      continue;
+    }
+    if (f.type === 'classButtons') {
+      data[f.name] = document.getElementById(`field-${f.name}`).value ? document.getElementById(`field-${f.name}`).value.split(',') : [];
+      if (f.required && data[f.name].length === 0) { alert(`${f.label}不能为空`); return; }
+      continue;
+    }
     if (f.required && !val) { alert(`${f.label}不能为空`); return; }
     if (f.type === 'number') data[f.name] = parseInt(val) || 0;
     else data[f.name] = val;
@@ -390,11 +493,13 @@ function saveModal() {
   if (editingId) {
     if (currentTab === 'teachers') DataStore.updateTeacher(editingId, data);
     else if (currentTab === 'courses') DataStore.updateCourse(editingId, data);
-    else DataStore.updateClass(editingId, data);
+    else if (currentTab === 'classes') DataStore.updateClass(editingId, data);
+    else if (currentTab === 'weekRules') DataStore.updateWeekRule(editingId, data);
   } else {
     if (currentTab === 'teachers') DataStore.addTeacher(data);
     else if (currentTab === 'courses') DataStore.addCourse(data);
-    else DataStore.addClass(data);
+    else if (currentTab === 'classes') DataStore.addClass(data);
+    else if (currentTab === 'weekRules') DataStore.addWeekRule(data);
   }
 
   closeModal();
@@ -409,7 +514,8 @@ function deleteItem(id) {
   if (!confirm('确定删除？')) return;
   if (currentTab === 'teachers') DataStore.deleteTeacher(id);
   else if (currentTab === 'courses') DataStore.deleteCourse(id);
-  else DataStore.deleteClass(id);
+  else if (currentTab === 'classes') DataStore.deleteClass(id);
+  else if (currentTab === 'weekRules') DataStore.deleteWeekRule(id);
   selectedIds.delete(id);
   renderTable();
 }
@@ -420,7 +526,8 @@ function batchDelete() {
   const ids = Array.from(selectedIds);
   if (currentTab === 'teachers') DataStore.deleteTeachers(ids);
   else if (currentTab === 'courses') DataStore.deleteCourses(ids);
-  else DataStore.deleteClasses(ids);
+  else if (currentTab === 'classes') DataStore.deleteClasses(ids);
+  else if (currentTab === 'weekRules') DataStore.deleteWeekRules(ids);
   selectedIds.clear();
   renderTable();
 }
